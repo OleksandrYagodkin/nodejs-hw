@@ -8,7 +8,7 @@
     "dev": "nodemon src/server.js"
   },
   "keywords": [],
-  "author": "Viktor Liulchyk <viktor.lyulchik@gmail.com>",
+  "author": "Oleksandr Yahodkin <0506aleksandr@gmail.com>",
   "license": "ISC",
   "type": "module",
   "devDependencies": {
