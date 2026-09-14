@@ -1,21 +1,19 @@
-import { Schema } from 'mongoose';
-import { model } from 'mongoose';
+import { Schema, model } from 'mongoose';
 
 const noteSchema = new Schema(
   {
     title: {
       type: String,
       required: true,
+      trim: true,
     },
     content: {
       type: String,
-      required: false,
       default: '',
+      trim: true,
     },
-
     tag: {
       type: String,
-      required: false,
       enum: [
         'Work',
         'Personal',
