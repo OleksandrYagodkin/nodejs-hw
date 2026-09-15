@@ -3,7 +3,9 @@ import { isValidObjectId } from 'mongoose';
 import { TAGS } from '../constants/tags.js';
 
 const objectIdValidator = (value, helpers) => {
-  return !isValidObjectId(value) ? helpers.message('Invalid id format') : value;
+  return !isValidObjectId(value)
+    ? helpers.message('Invalid noteId format')
+    : value;
 };
 
 export const updateNoteSchema = {
@@ -14,7 +16,6 @@ export const updateNoteSchema = {
     title: Joi.string().min(1).messages({
       'string.base': 'Title must be a string',
       'string.min': 'Title should have at least {#limit} characters',
-      'any.required': 'Title is required',
     }),
     content: Joi.string().allow('').messages({
       'string.base': 'Content must be a string',
@@ -23,8 +24,7 @@ export const updateNoteSchema = {
       .valid(...TAGS)
       .optional()
       .messages({
-        'any.only': `Tag must be one of: ${TAGS.join(',')}`,
-        'any.required': 'Tag is required',
+        'any.only': `Tag must be one of: ${TAGS.join(', ')}`,
       }),
   }).min(1),
 };
@@ -47,10 +47,9 @@ export const createNoteSchema = {
     }),
     tag: Joi.string()
       .valid(...TAGS)
-      .required()
+      .optional()
       .messages({
-        'any.only': `Tag must be one of: ${TAGS.join(',')}`,
-        'any.required': 'Tag is required',
+        'any.only': `Tag must be one of: ${TAGS.join(', ')}`,
       }),
   }),
 };
@@ -62,6 +61,6 @@ export const getAllNotesSchema = {
     tag: Joi.string()
       .valid(...TAGS)
       .optional(),
-    search: Joi.string().optional().allow(''),
+    search: Joi.string().allow('').optional(),
   }),
 };
