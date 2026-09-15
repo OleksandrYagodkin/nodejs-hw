@@ -63,9 +63,11 @@ export const logoutUser = async (req, res) => {
 };
 
 export const refreshUserSession = async (req, res, next) => {
+  const { sessionId, refreshToken } = req.cookies;
+
   const session = await Session.findOne({
-    _id: req.cookies.sessionId,
-    refreshToken: req.cookies.refreshToken,
+    _id: sessionId,
+    refreshToken,
   });
 
   if (!session) {
@@ -76,15 +78,29 @@ export const refreshUserSession = async (req, res, next) => {
     new Date() > new Date(session.refreshTokenValidUntil);
 
   if (isSessionTokenExpired) {
+    await Session.deleteOne({
+      _id: session._id,
+    });
+
+    const cookieOptions = {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+    };
+
+    res.clearCookie('sessionId', cookieOptions);
+    res.clearCookie('accessToken', cookieOptions);
+    res.clearCookie('refreshToken', cookieOptions);
+
     return next(createHttpError(401, 'Session token expired'));
   }
 
   await Session.deleteOne({
-    _id: req.cookies.sessionId,
-    refreshToken: req.cookies.refreshToken,
+    _id: session._id,
   });
 
   const newSession = await createSession(session.userId);
+
   setSessionCookies(res, newSession);
 
   res.status(200).json({
