@@ -13,7 +13,7 @@ import userRoutes from './routes/userRoutes.js';
 import { env } from './utils/env.js';
 
 const app = express();
-const PORT = env('PORT', 3030);
+const PORT = env('PORT', 3000);
 
 app.use(express.json());
 app.use(cors());
