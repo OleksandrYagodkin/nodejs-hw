@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 import { User } from '../models/user.js';
 import { createSession, setSessionCookies } from '../services/auth.js';
 import { Session } from '../models/session.js';
-import { sendMail } from '../utils/sendMail.js';
+import { sendEmail } from '../utils/sendMail.js';
 import { env } from '../utils/env.js';
 
 export const registerUser = async (req, res, next) => {
@@ -82,6 +82,15 @@ export const refreshUserSession = async (req, res, next) => {
     new Date() > new Date(session.refreshTokenValidUntil);
 
   if (isSessionTokenExpired) {
+    await Session.deleteOne({
+      _id: req.cookies.sessionId,
+      refreshToken: req.cookies.refreshToken,
+    });
+
+    res.clearCookie('sessionId');
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+
     return next(createHttpError(401, 'Session token expired'));
   }
 
@@ -104,7 +113,7 @@ export const requestResetEmail = async (req, res, next) => {
   const user = await User.findOne({ email });
   if (!user) {
     return res.status(200).json({
-      message: 'If this email exists, a reset link has been sent',
+      message: 'Password reset email sent successfully',
     });
   }
 
@@ -126,10 +135,8 @@ export const requestResetEmail = async (req, res, next) => {
     'FRONTEND_DOMAIN',
   )}/reset-password?token=${resetToken}`;
 
-  // console.log(html);
-
   try {
-    await sendMail({
+    await sendEmail({
       from: env('SMTP_FROM'),
       to: email,
       subject: 'Reset your password',
@@ -171,6 +178,6 @@ export const resetPassword = async (req, res, next) => {
   await Session.deleteMany({ userId: user._id });
 
   res.status(200).json({
-    message: 'Password reset successfully.',
+    message: 'Password reset successfully',
   });
 };
