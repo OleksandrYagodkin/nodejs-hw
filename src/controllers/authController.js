@@ -1,8 +1,14 @@
 import bcrypt from 'bcrypt';
 import createHttpError from 'http-errors';
+import jwt from 'jsonwebtoken';
+import handlebars from 'handlebars';
+import path from 'node:path';
+import fs from 'node:fs/promises';
 import { User } from '../models/user.js';
 import { createSession, setSessionCookies } from '../services/auth.js';
 import { Session } from '../models/session.js';
+import { sendMail } from '../utils/sendMail.js';
+import { env } from '../utils/env.js';
 
 export const registerUser = async (req, res, next) => {
   const { email, password } = req.body;
@@ -63,11 +69,9 @@ export const logoutUser = async (req, res) => {
 };
 
 export const refreshUserSession = async (req, res, next) => {
-  const { sessionId, refreshToken } = req.cookies;
-
   const session = await Session.findOne({
-    _id: sessionId,
-    refreshToken,
+    _id: req.cookies.sessionId,
+    refreshToken: req.cookies.refreshToken,
   });
 
   if (!session) {
@@ -78,32 +82,95 @@ export const refreshUserSession = async (req, res, next) => {
     new Date() > new Date(session.refreshTokenValidUntil);
 
   if (isSessionTokenExpired) {
-    await Session.deleteOne({
-      _id: session._id,
-    });
-
-    const cookieOptions = {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-    };
-
-    res.clearCookie('sessionId', cookieOptions);
-    res.clearCookie('accessToken', cookieOptions);
-    res.clearCookie('refreshToken', cookieOptions);
-
     return next(createHttpError(401, 'Session token expired'));
   }
 
   await Session.deleteOne({
-    _id: session._id,
+    _id: req.cookies.sessionId,
+    refreshToken: req.cookies.refreshToken,
   });
 
   const newSession = await createSession(session.userId);
-
   setSessionCookies(res, newSession);
 
   res.status(200).json({
     message: 'Session refreshed',
+  });
+};
+
+export const requestResetEmail = async (req, res, next) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(200).json({
+      message: 'If this email exists, a reset link has been sent',
+    });
+  }
+
+  const resetToken = jwt.sign({ sub: user._id, email }, env('JWT_SECRET'), {
+    expiresIn: '15m',
+  });
+
+  const templatePath = path.resolve('src/templates/reset-password-email.html');
+  const templateSource = await fs.readFile(templatePath, 'utf-8');
+  const template = handlebars.compile(templateSource);
+  const html = template({
+    name: user.username,
+    link: `${env('FRONTEND_DOMAIN')}/reset-password?token=${resetToken}`,
+  });
+
+  const text = `Hello ${
+    user.username
+  },\n\nPlease reset your password by clicking the link: ${env(
+    'FRONTEND_DOMAIN',
+  )}/reset-password?token=${resetToken}`;
+
+  // console.log(html);
+
+  try {
+    await sendMail({
+      from: env('SMTP_FROM'),
+      to: email,
+      subject: 'Reset your password',
+      html: html,
+      text: text,
+    });
+  } catch {
+    next(
+      createHttpError(500, 'Failed to send the email, please try again later.'),
+    );
+    return;
+  }
+
+  res.status(200).json({
+    message: 'Password reset email sent successfully',
+  });
+};
+
+export const resetPassword = async (req, res, next) => {
+  const { token, password } = req.body;
+
+  let payload;
+  try {
+    payload = jwt.verify(token, env('JWT_SECRET'));
+  } catch {
+    next(createHttpError(401, 'Invalid or expired token'));
+    return;
+  }
+
+  const user = await User.findOne({ _id: payload.sub, email: payload.email });
+  if (!user) {
+    next(createHttpError(404, 'User not found'));
+    return;
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  await User.updateOne({ _id: user._id }, { password: hashedPassword });
+
+  await Session.deleteMany({ userId: user._id });
+
+  res.status(200).json({
+    message: 'Password reset successfully.',
   });
 };
